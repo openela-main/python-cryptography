@@ -1,0 +1,319 @@
+From ff80e3a27408657fef599f44ae1a9a875e005685 Mon Sep 17 00:00:00 2001
+From: Christian Heimes <christian@python.org>
+Date: Wed, 2 Mar 2022 21:47:04 +0200
+Subject: [PATCH 2/5] Disable DSA tests in FIPS mode (#6916)
+
+* Disable DSA tests in FIPS mode
+
+See: #6880
+
+* ignore coverage for nested FIPS check
+
+* Remove if branch
+
+* Remove skip modulus branch
+
+* Keep tests that don't use the backend
+---
+ .../hazmat/backends/openssl/backend.py        |  7 ++-
+ tests/hazmat/primitives/test_dsa.py           | 46 +++++++++++--------
+ tests/hazmat/primitives/test_serialization.py | 24 ++++++++++
+ tests/x509/test_x509.py                       | 43 ++++++++++++++---
+ tests/x509/test_x509_ext.py                   |  4 ++
+ 5 files changed, 98 insertions(+), 26 deletions(-)
+
+diff --git a/src/cryptography/hazmat/backends/openssl/backend.py b/src/cryptography/hazmat/backends/openssl/backend.py
+index f38269e26..a6d0e8872 100644
+--- a/src/cryptography/hazmat/backends/openssl/backend.py
++++ b/src/cryptography/hazmat/backends/openssl/backend.py
+@@ -804,7 +804,12 @@ class Backend(BackendInterface):
+         self.openssl_assert(res == 1)
+         return evp_pkey
+ 
+-    def dsa_hash_supported(self, algorithm):
++    def dsa_supported(self) -> bool:
++        return not self._fips_enabled
++
++    def dsa_hash_supported(self, algorithm: hashes.HashAlgorithm) -> bool:
++        if not self.dsa_supported():
++            return False
+         return self.hash_supported(algorithm)
+ 
+     def dsa_parameters_supported(self, p, q, g):
+diff --git a/tests/hazmat/primitives/test_dsa.py b/tests/hazmat/primitives/test_dsa.py
+index 6028b600d..60681683d 100644
+--- a/tests/hazmat/primitives/test_dsa.py
++++ b/tests/hazmat/primitives/test_dsa.py
+@@ -59,7 +59,12 @@ def test_skip_if_dsa_not_supported(backend):
+         _skip_if_dsa_not_supported(backend, DummyHashAlgorithm(), 1, 1, 1)
+ 
+ 
+-class TestDSA(object):
++
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSA:
+     def test_generate_dsa_parameters(self, backend):
+         parameters = dsa.generate_parameters(2048, backend)
+         assert isinstance(parameters, dsa.DSAParameters)
+@@ -76,11 +81,6 @@ class TestDSA(object):
+         ),
+     )
+     def test_generate_dsa_keys(self, vector, backend):
+-        if (
+-            backend._fips_enabled
+-            and vector["p"] < backend._fips_dsa_min_modulus
+-        ):
+-            pytest.skip("Small modulus blocked in FIPS mode")
+         parameters = dsa.DSAParameterNumbers(
+             p=vector["p"], q=vector["q"], g=vector["g"]
+         ).parameters(backend)
+@@ -389,7 +389,12 @@ class TestDSA(object):
+         ).private_key(backend)
+ 
+ 
+-class TestDSAVerification(object):
++
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSAVerification:
+     def test_dsa_verification(self, backend, subtests):
+         vectors = load_vectors_from_file(
+             os.path.join("asymmetric", "DSA", "FIPS_186-3", "SigVer.rsp"),
+@@ -481,17 +486,12 @@ class TestDSAVerification(object):
+                 Prehashed(hashes.SHA1())  # type: ignore[arg-type]
+             )
+ 
+-    def test_prehashed_unsupported_in_verifier_ctx(self, backend):
+-        public_key = DSA_KEY_1024.private_key(backend).public_key()
+-        with pytest.raises(TypeError), pytest.warns(
+-            CryptographyDeprecationWarning
+-        ):
+-            public_key.verifier(
+-                b"0" * 64, Prehashed(hashes.SHA1())  # type: ignore[arg-type]
+-            )
+-
+ 
+-class TestDSASignature(object):
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSASignature:
+     def test_dsa_signing(self, backend, subtests):
+         vectors = load_vectors_from_file(
+             os.path.join("asymmetric", "DSA", "FIPS_186-3", "SigGen.txt"),
+@@ -695,7 +695,11 @@ class TestDSANumberEquality(object):
+         assert priv != object()
+ 
+ 
+-class TestDSASerialization(object):
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSASerialization:
+     @pytest.mark.parametrize(
+         ("fmt", "password"),
+         itertools.product(
+@@ -916,7 +920,11 @@ class TestDSASerialization(object):
+             )
+ 
+ 
+-class TestDSAPEMPublicKeySerialization(object):
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSAPEMPublicKeySerialization:
+     @pytest.mark.parametrize(
+         ("key_path", "loader_func", "encoding"),
+         [
+diff --git a/tests/hazmat/primitives/test_serialization.py b/tests/hazmat/primitives/test_serialization.py
+index fb6b753de..5a2b9fba5 100644
+--- a/tests/hazmat/primitives/test_serialization.py
++++ b/tests/hazmat/primitives/test_serialization.py
+@@ -141,6 +141,10 @@ class TestDERSerialization(object):
+         assert isinstance(key, rsa.RSAPrivateKey)
+         _check_rsa_private_numbers(key.private_numbers())
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     @pytest.mark.parametrize(
+         ("key_path", "password"),
+         [
+@@ -341,6 +345,10 @@ class TestDERSerialization(object):
+         with pytest.raises(ValueError):
+             load_der_public_key(b"invalid data", backend)
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     @pytest.mark.parametrize(
+         "key_file",
+         [
+@@ -422,6 +430,10 @@ class TestPEMSerialization(object):
+         assert isinstance(key, rsa.RSAPrivateKey)
+         _check_rsa_private_numbers(key.private_numbers())
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     @pytest.mark.parametrize(
+         ("key_path", "password"),
+         [
+@@ -490,6 +502,10 @@ class TestPEMSerialization(object):
+         numbers = key.public_numbers()
+         assert numbers.e == 65537
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     @pytest.mark.parametrize(
+         ("key_file"),
+         [
+@@ -894,6 +910,10 @@ class TestPEMSerialization(object):
+             16,
+         )
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     def test_load_pem_dsa_private_key(self, backend):
+         key = load_vectors_from_file(
+             os.path.join("asymmetric", "PKCS8", "unenc-dsa-pkcs8.pem"),
+@@ -2313,6 +2333,10 @@ class TestOpenSSHSerialization(object):
+                 DummyKeySerializationEncryption(),
+             )
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     @pytest.mark.parametrize(
+         ("key_path", "supported"),
+         [
+diff --git a/tests/x509/test_x509.py b/tests/x509/test_x509.py
+index 23e97a768..7a7a52977 100644
+--- a/tests/x509/test_x509.py
++++ b/tests/x509/test_x509.py
+@@ -2561,7 +2561,21 @@ class TestCertificateBuilder(object):
+         only_if=lambda backend: backend.hash_supported(hashes.MD5()),
+         skip_message="Requires OpenSSL with MD5 support",
+     )
+-    def test_sign_dsa_with_md5(self, backend):
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
++    @pytest.mark.parametrize(
++        "hash_algorithm",
++        [
++            hashes.MD5(),
++            hashes.SHA3_224(),
++            hashes.SHA3_256(),
++            hashes.SHA3_384(),
++            hashes.SHA3_512(),
++        ],
++    )
++    def test_sign_dsa_with_unsupported_hash(self, hash_algorithm, backend):
+         private_key = DSA_KEY_2048.private_key(backend)
+         builder = x509.CertificateBuilder()
+         builder = (
+@@ -2602,6 +2616,10 @@ class TestCertificateBuilder(object):
+         with pytest.raises(ValueError):
+             builder.sign(private_key, hashes.MD5(), backend)
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     @pytest.mark.parametrize(
+         ("hashalg", "hashalg_oid"),
+         [
+@@ -2615,9 +2633,6 @@ class TestCertificateBuilder(object):
+     def test_build_cert_with_dsa_private_key(
+         self, hashalg, hashalg_oid, backend
+     ):
+-        if backend._fips_enabled and hashalg is hashes.SHA1:
+-            pytest.skip("SHA1 not supported in FIPS mode")
+-
+         issuer_private_key = DSA_KEY_2048.private_key(backend)
+         subject_private_key = DSA_KEY_2048.private_key(backend)
+ 
+@@ -3646,6 +3661,10 @@ class TestCertificateSigningRequestBuilder(object):
+         only_if=lambda backend: backend.hash_supported(hashes.MD5()),
+         skip_message="Requires OpenSSL with MD5 support",
+     )
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     def test_sign_dsa_with_md5(self, backend):
+         private_key = DSA_KEY_2048.private_key(backend)
+         builder = x509.CertificateSigningRequestBuilder().subject_name(
+@@ -3969,6 +3988,10 @@ class TestCertificateSigningRequestBuilder(object):
+         assert basic_constraints.value.ca is True
+         assert basic_constraints.value.path_length == 2
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     def test_build_ca_request_with_dsa(self, backend):
+         private_key = DSA_KEY_2048.private_key(backend)
+ 
+@@ -4319,7 +4342,11 @@ class TestCertificateSigningRequestBuilder(object):
+             builder.sign(private_key, hashes.SHA512(), backend)
+ 
+ 
+-class TestDSACertificate(object):
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSACertificate:
+     def test_load_dsa_cert(self, backend):
+         cert = _load_cert(
+             os.path.join("x509", "custom", "dsa_selfsigned_ca.pem"),
+@@ -4444,7 +4471,11 @@ class TestDSACertificate(object):
+         )
+ 
+ 
+-class TestDSACertificateRequest(object):
++@pytest.mark.supported(
++    only_if=lambda backend: backend.dsa_supported(),
++    skip_message="Does not support DSA.",
++)
++class TestDSACertificateRequest:
+     @pytest.mark.parametrize(
+         ("path", "loader_func"),
+         [
+diff --git a/tests/x509/test_x509_ext.py b/tests/x509/test_x509_ext.py
+index 4173dece6..66ac43d95 100644
+--- a/tests/x509/test_x509_ext.py
++++ b/tests/x509/test_x509_ext.py
+@@ -1712,6 +1712,10 @@ class TestSubjectKeyIdentifierExtension(object):
+         ski = x509.SubjectKeyIdentifier.from_public_key(cert.public_key())
+         assert ext.value == ski
+ 
++    @pytest.mark.supported(
++        only_if=lambda backend: backend.dsa_supported(),
++        skip_message="Does not support DSA.",
++    )
+     def test_from_dsa_public_key(self, backend):
+         cert = _load_cert(
+             os.path.join("x509", "custom", "dsa_selfsigned_ca.pem"),
+-- 
+2.35.1
+
