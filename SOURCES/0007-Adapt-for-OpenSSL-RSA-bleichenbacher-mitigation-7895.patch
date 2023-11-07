@@ -1,0 +1,83 @@
+From ca92d13436944090faa79ffc25378c45ec564a4d Mon Sep 17 00:00:00 2001
+From: Alex Gaynor <alex.gaynor@gmail.com>
+Date: Wed, 14 Dec 2022 01:50:06 -0500
+Subject: [PATCH] Adapt for OpenSSL RSA bleichenbacher mitigation (#7895)
+
+Attempt to work-around wycheproof tests
+---
+ src/_cffi_src/openssl/rsa.py        |  8 ++++++++
+ tests/hazmat/primitives/test_rsa.py |  5 +++--
+ tests/wycheproof/test_rsa.py        | 20 +++++++++++++++-----
+ 3 files changed, 26 insertions(+), 7 deletions(-)
+
+diff --git a/src/_cffi_src/openssl/rsa.py b/src/_cffi_src/openssl/rsa.py
+index 5d1e163b1..2682ea1e4 100644
+--- a/src/_cffi_src/openssl/rsa.py
++++ b/src/_cffi_src/openssl/rsa.py
+@@ -18,6 +18,8 @@ static const int RSA_F4;
+ 
+ static const int Cryptography_HAS_RSA_OAEP_MD;
+ static const int Cryptography_HAS_RSA_OAEP_LABEL;
++
++static const int Cryptography_HAS_IMPLICIT_RSA_REJECTION;
+ """
+ 
+ FUNCTIONS = """
+@@ -57,4 +59,10 @@ int (*EVP_PKEY_CTX_set_rsa_oaep_md)(EVP_PKEY_CTX *, EVP_MD *) = NULL;
+ int (*EVP_PKEY_CTX_set0_rsa_oaep_label)(EVP_PKEY_CTX *, unsigned char *,
+                                         int) = NULL;
+ #endif
++
++#if defined(EVP_PKEY_CTRL_RSA_IMPLICIT_REJECTION)
++static const int Cryptography_HAS_IMPLICIT_RSA_REJECTION = 1;
++#else
++static const int Cryptography_HAS_IMPLICIT_RSA_REJECTION = 0;
++#endif
+ """
+diff --git a/tests/hazmat/primitives/test_rsa.py b/tests/hazmat/primitives/test_rsa.py
+index 4fb205db4..0315489dc 100644
+--- a/tests/hazmat/primitives/test_rsa.py
++++ b/tests/hazmat/primitives/test_rsa.py
+@@ -1551,8 +1551,9 @@ class TestRSADecryption(object):
+             private_key.decrypt(b"0" * 256, DummyAsymmetricPadding())
+ 
+     @pytest.mark.supported(
+-        only_if=lambda backend: backend.rsa_padding_supported(
+-            padding.PKCS1v15()
++        only_if=lambda backend: (
++            backend.rsa_padding_supported(padding.PKCS1v15())
++            and not backend._lib.Cryptography_HAS_IMPLICIT_RSA_REJECTION
+         ),
+         skip_message="Does not support PKCS1v1.5.",
+     )
+diff --git a/tests/wycheproof/test_rsa.py b/tests/wycheproof/test_rsa.py
+index 79fd682b7..e6bd8af8a 100644
+--- a/tests/wycheproof/test_rsa.py
++++ b/tests/wycheproof/test_rsa.py
+@@ -245,8 +245,18 @@ def test_rsa_pkcs1_encryption(backend, wycheproof):
+         )
+         assert pt == binascii.unhexlify(wycheproof.testcase["msg"])
+     else:
+-        with pytest.raises(ValueError):
+-            key.decrypt(
+-                binascii.unhexlify(wycheproof.testcase["ct"]),
+-                padding.PKCS1v15(),
+-            )
++        if backend._lib.Cryptography_HAS_IMPLICIT_RSA_REJECTION:
++            try:
++                assert key.decrypt(
++                    binascii.unhexlify(wycheproof.testcase["ct"]),
++                    padding.PKCS1v15(),
++                ) != binascii.unhexlify(wycheproof.testcase["ct"])
++            except ValueError:
++                # Some raise ValueError due to length mismatch.
++                pass
++        else:
++            with pytest.raises(ValueError):
++                key.decrypt(
++                    binascii.unhexlify(wycheproof.testcase["ct"]),
++                    padding.PKCS1v15(),
++                )
+-- 
+2.40.1
+
