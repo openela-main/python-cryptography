@@ -1,0 +1,75 @@
+From e8ed37e0d24a1cc7482ab816ed5f25243395b2ef Mon Sep 17 00:00:00 2001
+From: Christian Heimes <cheimes@redhat.com>
+Date: Mon, 14 Dec 2020 14:13:53 +0100
+Subject: [PATCH] Revert "remove NPN bindings -- you should be using ALPN!
+ (#4765)"
+
+This reverts commit 99bf4e4605cbe54bad597da1ebe4cc323909083c.
+---
+ src/_cffi_src/openssl/ssl.py          | 20 +++++++++++++++++++-
+ tests/hazmat/bindings/test_openssl.py |  4 ++++
+ 2 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/src/_cffi_src/openssl/ssl.py b/src/_cffi_src/openssl/ssl.py
+index c38e309a1..fa854f5dd 100644
+--- a/src/_cffi_src/openssl/ssl.py
++++ b/src/_cffi_src/openssl/ssl.py
+@@ -138,6 +138,8 @@ static const long SSL3_RANDOM_SIZE;
+ static const long TLS_ST_BEFORE;
+ static const long TLS_ST_OK;
+ 
++static const long OPENSSL_NPN_NEGOTIATED;
++
+ typedef ... SSL_METHOD;
+ typedef ... SSL_CTX;
+ 
+@@ -401,9 +403,25 @@ SRTP_PROTECTION_PROFILE *SSL_get_selected_srtp_profile(SSL *);
+ 
+ long SSL_session_reused(SSL *);
+ 
++void SSL_CTX_set_next_protos_advertised_cb(SSL_CTX *,
++                                           int (*)(SSL *,
++                                                   const unsigned char **,
++                                                   unsigned int *,
++                                                   void *),
++                                           void *);
++void SSL_CTX_set_next_proto_select_cb(SSL_CTX *,
++                                      int (*)(SSL *,
++                                              unsigned char **,
++                                              unsigned char *,
++                                              const unsigned char *,
++                                              unsigned int,
++                                              void *),
++                                      void *);
+ int SSL_select_next_proto(unsigned char **, unsigned char *,
+                           const unsigned char *, unsigned int,
+                           const unsigned char *, unsigned int);
++void SSL_get0_next_proto_negotiated(const SSL *,
++                                    const unsigned char **, unsigned *);
+ 
+ int sk_SSL_CIPHER_num(Cryptography_STACK_OF_SSL_CIPHER *);
+ const SSL_CIPHER *sk_SSL_CIPHER_value(Cryptography_STACK_OF_SSL_CIPHER *, int);
+@@ -601,7 +619,7 @@ static const long Cryptography_HAS_TLSv1_2 = 1;
+ static const long Cryptography_HAS_SSL_OP_MSIE_SSLV2_RSA_PADDING = 1;
+ static const long Cryptography_HAS_SSL_OP_NO_TICKET = 1;
+ static const long Cryptography_HAS_SSL_SET_SSL_CTX = 1;
+-static const long Cryptography_HAS_NEXTPROTONEG = 0;
++static const long Cryptography_HAS_NEXTPROTONEG = 1;
+ static const long Cryptography_HAS_ALPN = 1;
+ 
+ #if CRYPTOGRAPHY_IS_LIBRESSL
+diff --git a/tests/hazmat/bindings/test_openssl.py b/tests/hazmat/bindings/test_openssl.py
+index ecee34091..aeb12a0dc 100644
+--- a/tests/hazmat/bindings/test_openssl.py
++++ b/tests/hazmat/bindings/test_openssl.py
+@@ -137,3 +137,7 @@ class TestOpenSSL(object):
+         )
+         with pytest.raises(RuntimeError):
+             _verify_openssl_version(lib)
++
++    def test_npn_binding(self):
++        b = Binding()
++        assert b.lib.Cryptography_HAS_NEXTPROTONEG
+-- 
+2.29.2
+

@@ -1,0 +1,254 @@
+From e3e043ab363387033ddfdcaf3c15d8cf8dda17ed Mon Sep 17 00:00:00 2001
+From: Christian Heimes <cheimes@redhat.com>
+Date: Tue, 27 Oct 2020 16:42:15 +0100
+Subject: [PATCH 1] Re-add deprecated and removed features
+
+* encode_rfc6979_signature()
+* decode_rfc6979_signature()
+* Certificate.serial property
+* MACContext
+* osrandom engine is disabled
+
+Signed-off-by: Christian Heimes <cheimes@redhat.com>
+---
+ .../hazmat/backends/openssl/cmac.py           |  3 +-
+ .../hazmat/backends/openssl/hmac.py           |  3 +-
+ .../hazmat/backends/openssl/x509.py           |  4 ++
+ .../hazmat/primitives/asymmetric/utils.py     |  8 ++++
+ src/cryptography/hazmat/primitives/cmac.py    |  3 +-
+ src/cryptography/hazmat/primitives/hmac.py    |  3 +-
+ src/cryptography/hazmat/primitives/mac.py     | 37 +++++++++++++++++++
+ src/cryptography/x509/extensions.py           |  6 ++-
+ tests/hazmat/backends/test_openssl.py         |  3 ++
+ tests/hazmat/primitives/test_asym_utils.py    |  9 +++++
+ tests/x509/test_x509.py                       |  1 +
+ tests/x509/test_x509_ext.py                   |  5 +++
+ 12 files changed, 80 insertions(+), 5 deletions(-)
+ create mode 100644 src/cryptography/hazmat/primitives/mac.py
+
+diff --git a/src/cryptography/hazmat/backends/openssl/cmac.py b/src/cryptography/hazmat/backends/openssl/cmac.py
+index 195fc230f..5281f634d 100644
+--- a/src/cryptography/hazmat/backends/openssl/cmac.py
++++ b/src/cryptography/hazmat/backends/openssl/cmac.py
+@@ -11,10 +11,11 @@ from cryptography.exceptions import (
+     UnsupportedAlgorithm,
+     _Reasons,
+ )
+-from cryptography.hazmat.primitives import constant_time
++from cryptography.hazmat.primitives import constant_time, mac
+ from cryptography.hazmat.primitives.ciphers.modes import CBC
+ 
+ 
++@utils.register_interface(mac.MACContext)
+ class _CMACContext(object):
+     def __init__(self, backend, algorithm, ctx=None):
+         if not backend.cmac_algorithm_supported(algorithm):
+diff --git a/src/cryptography/hazmat/backends/openssl/hmac.py b/src/cryptography/hazmat/backends/openssl/hmac.py
+index 5024223b2..11c850e10 100644
+--- a/src/cryptography/hazmat/backends/openssl/hmac.py
++++ b/src/cryptography/hazmat/backends/openssl/hmac.py
+@@ -11,9 +11,10 @@ from cryptography.exceptions import (
+     UnsupportedAlgorithm,
+     _Reasons,
+ )
+-from cryptography.hazmat.primitives import constant_time, hashes
++from cryptography.hazmat.primitives import constant_time, hashes, mac
+ 
+ 
++@utils.register_interface(mac.MACContext)
+ @utils.register_interface(hashes.HashContext)
+ class _HMACContext(object):
+     def __init__(self, backend, key, algorithm, ctx=None):
+diff --git a/src/cryptography/hazmat/backends/openssl/x509.py b/src/cryptography/hazmat/backends/openssl/x509.py
+index 4d0dac764..c9074f59e 100644
+--- a/src/cryptography/hazmat/backends/openssl/x509.py
++++ b/src/cryptography/hazmat/backends/openssl/x509.py
+@@ -73,6 +73,10 @@ class _Certificate(object):
+         self._backend.openssl_assert(asn1_int != self._backend._ffi.NULL)
+         return _asn1_integer_to_int(self._backend, asn1_int)
+ 
++    @property
++    def serial(self):
++        return self.serial_number
++
+     def public_key(self):
+         pkey = self._backend._lib.X509_get_pubkey(self._x509)
+         if pkey == self._backend._ffi.NULL:
+diff --git a/src/cryptography/hazmat/primitives/asymmetric/utils.py b/src/cryptography/hazmat/primitives/asymmetric/utils.py
+index 5f9b67786..886d7565b 100644
+--- a/src/cryptography/hazmat/primitives/asymmetric/utils.py
++++ b/src/cryptography/hazmat/primitives/asymmetric/utils.py
+@@ -39,3 +39,11 @@ class Prehashed(object):
+         self._digest_size = algorithm.digest_size
+ 
+     digest_size = utils.read_only_property("_digest_size")
++
++
++def decode_rfc6979_signature(signature):
++    return decode_dss_signature(signature)
++
++
++def encode_rfc6979_signature(r, s):
++    return encode_dss_signature(r, s)
+diff --git a/src/cryptography/hazmat/primitives/cmac.py b/src/cryptography/hazmat/primitives/cmac.py
+index bf962c906..7f37f13cc 100644
+--- a/src/cryptography/hazmat/primitives/cmac.py
++++ b/src/cryptography/hazmat/primitives/cmac.py
+@@ -12,9 +12,10 @@ from cryptography.exceptions import (
+ )
+ from cryptography.hazmat.backends import _get_backend
+ from cryptography.hazmat.backends.interfaces import CMACBackend
+-from cryptography.hazmat.primitives import ciphers
++from cryptography.hazmat.primitives import ciphers, mac
+ 
+ 
++@utils.register_interface(mac.MACContext)
+ class CMAC(object):
+     def __init__(self, algorithm, backend=None, ctx=None):
+         backend = _get_backend(backend)
+diff --git a/src/cryptography/hazmat/primitives/hmac.py b/src/cryptography/hazmat/primitives/hmac.py
+index 8c421dc68..6f03a1071 100644
+--- a/src/cryptography/hazmat/primitives/hmac.py
++++ b/src/cryptography/hazmat/primitives/hmac.py
+@@ -12,9 +12,10 @@ from cryptography.exceptions import (
+ )
+ from cryptography.hazmat.backends import _get_backend
+ from cryptography.hazmat.backends.interfaces import HMACBackend
+-from cryptography.hazmat.primitives import hashes
++from cryptography.hazmat.primitives import hashes, mac
+ 
+ 
++@utils.register_interface(mac.MACContext)
+ @utils.register_interface(hashes.HashContext)
+ class HMAC(object):
+     def __init__(self, key, algorithm, backend=None, ctx=None):
+diff --git a/src/cryptography/hazmat/primitives/mac.py b/src/cryptography/hazmat/primitives/mac.py
+new file mode 100644
+index 000000000..4c95190ba
+--- /dev/null
++++ b/src/cryptography/hazmat/primitives/mac.py
+@@ -0,0 +1,37 @@
++# This file is dual licensed under the terms of the Apache License, Version
++# 2.0, and the BSD License. See the LICENSE file in the root of this repository
++# for complete details.
++
++from __future__ import absolute_import, division, print_function
++
++import abc
++
++import six
++
++
++@six.add_metaclass(abc.ABCMeta)
++class MACContext(object):
++    @abc.abstractmethod
++    def update(self, data):
++        """
++        Processes the provided bytes.
++        """
++
++    @abc.abstractmethod
++    def finalize(self):
++        """
++        Returns the message authentication code as bytes.
++        """
++
++    @abc.abstractmethod
++    def copy(self):
++        """
++        Return a MACContext that is a copy of the current context.
++        """
++
++    @abc.abstractmethod
++    def verify(self, signature):
++        """
++        Checks if the generated message authentication code matches the
++        signature.
++        """
+diff --git a/src/cryptography/x509/extensions.py b/src/cryptography/x509/extensions.py
+index 130ba69b8..ddbccdf3b 100644
+--- a/src/cryptography/x509/extensions.py
++++ b/src/cryptography/x509/extensions.py
+@@ -218,8 +218,12 @@ class AuthorityKeyIdentifier(object):
+ 
+     @classmethod
+     def from_issuer_subject_key_identifier(cls, ski):
++        if isinstance(ski, SubjectKeyIdentifier):
++            digest = ski.digest
++        else:
++            digest = ski.value.digest
+         return cls(
+-            key_identifier=ski.digest,
++            key_identifier=digest,
+             authority_cert_issuer=None,
+             authority_cert_serial_number=None,
+         )
+diff --git a/tests/hazmat/backends/test_openssl.py b/tests/hazmat/backends/test_openssl.py
+index 2f7e7bebf..73c17d84f 100644
+--- a/tests/hazmat/backends/test_openssl.py
++++ b/tests/hazmat/backends/test_openssl.py
+@@ -301,6 +301,9 @@ class TestOpenSSLRandomEngine(object):
+         res = backend._lib.ENGINE_free(e)
+         assert res == 1
+ 
++    def test_rhel8_no_osrandom(self):
++        pytest.fail("osrandom engine is not FIPS compliant, see RHBZ#1762667")
++
+ 
+ @pytest.mark.skipif(
+     backend._lib.CRYPTOGRAPHY_NEEDS_OSRANDOM_ENGINE,
+diff --git a/tests/hazmat/primitives/test_asym_utils.py b/tests/hazmat/primitives/test_asym_utils.py
+index 70bff012f..334b459b5 100644
+--- a/tests/hazmat/primitives/test_asym_utils.py
++++ b/tests/hazmat/primitives/test_asym_utils.py
+@@ -10,6 +10,8 @@ from cryptography.hazmat.primitives.asymmetric.utils import (
+     Prehashed,
+     decode_dss_signature,
+     encode_dss_signature,
++    encode_rfc6979_signature,
++    decode_rfc6979_signature
+ )
+ 
+ 
+@@ -75,3 +77,10 @@ def test_decode_dss_invalid_asn1():
+ def test_pass_invalid_prehashed_arg():
+     with pytest.raises(TypeError):
+         Prehashed(object())
++
++
++def test_deprecated_rfc6979_signature():
++    sig = encode_rfc6979_signature(1, 1)
++    assert sig == b"0\x06\x02\x01\x01\x02\x01\x01"
++    decoded = decode_rfc6979_signature(sig)
++    assert decoded == (1, 1)
+diff --git a/tests/x509/test_x509.py b/tests/x509/test_x509.py
+index 11c80816c..e5bdf17d4 100644
+--- a/tests/x509/test_x509.py
++++ b/tests/x509/test_x509.py
+@@ -685,6 +685,7 @@ class TestRSACertificate(object):
+         )
+         assert isinstance(cert, x509.Certificate)
+         assert cert.serial_number == 11559813051657483483
++        assert cert.serial == cert.serial_number
+         fingerprint = binascii.hexlify(cert.fingerprint(hashes.SHA1()))
+         assert fingerprint == b"2b619ed04bfc9c3b08eb677d272192286a0947a8"
+         assert isinstance(cert.signature_hash_algorithm, hashes.SHA1)
+diff --git a/tests/x509/test_x509_ext.py b/tests/x509/test_x509_ext.py
+index 2cd216fb6..ac2b2c03d 100644
+--- a/tests/x509/test_x509_ext.py
++++ b/tests/x509/test_x509_ext.py
+@@ -3442,6 +3442,11 @@ class TestAuthorityKeyIdentifierExtension(object):
+         )
+         assert ext.value == aki
+ 
++        aki = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(
++            ski_ext
++        )
++        assert ext.value == aki
++
+ 
+ class TestNameConstraints(object):
+     def test_ipaddress_wrong_type(self):
+-- 
+2.26.2
+

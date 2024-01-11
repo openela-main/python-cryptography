@@ -1,0 +1,73 @@
+From bea141d25bd2bc4eea7527e2d6ec1d85b2b3806d Mon Sep 17 00:00:00 2001
+From: Christian Heimes <cheimes@redhat.com>
+Date: Thu, 29 Oct 2020 09:21:06 +0100
+Subject: [PATCH 3] Skip iso8601 test cases
+
+---
+ tests/test_fernet.py | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/tests/test_fernet.py b/tests/test_fernet.py
+index 38409b03e..343f3e4ec 100644
+--- a/tests/test_fernet.py
++++ b/tests/test_fernet.py
+@@ -10,7 +10,10 @@ import json
+ import os
+ import time
+ 
+-import iso8601
++try:
++    import iso8601
++except ImportError:
++    iso8601 = None
+ 
+ import pytest
+ 
+@@ -24,6 +27,12 @@ from cryptography.hazmat.primitives.ciphers import algorithms, modes
+ import cryptography_vectors
+ 
+ 
++skip_iso8601 = pytest.mark.skipif(
++    iso8601 is None,
++    reason="is8601 is not available"
++)
++
++
+ def json_parametrize(keys, filename):
+     vector_file = cryptography_vectors.open_vector_file(
+         os.path.join("fernet", filename), "r"
+@@ -49,6 +58,7 @@ def test_default_backend():
+     skip_message="Does not support AES CBC",
+ )
+ class TestFernet(object):
++    @skip_iso8601
+     @json_parametrize(
+         ("secret", "now", "iv", "src", "token"),
+         "generate.json",
+@@ -62,6 +72,7 @@ class TestFernet(object):
+         )
+         assert actual_token == token.encode("ascii")
+ 
++    @skip_iso8601
+     @json_parametrize(
+         ("secret", "now", "src", "ttl_sec", "token"),
+         "verify.json",
+@@ -81,6 +92,7 @@ class TestFernet(object):
+         payload = f.decrypt(token.encode("ascii"), ttl=ttl_sec)
+         assert payload == src.encode("ascii")
+ 
++    @skip_iso8601
+     @json_parametrize(("secret", "token", "now", "ttl_sec"), "invalid.json")
+     def test_invalid(self, secret, token, now, ttl_sec, backend, monkeypatch):
+         f = Fernet(secret.encode("ascii"), backend=backend)
+@@ -117,6 +129,7 @@ class TestFernet(object):
+         with pytest.raises(TypeError):
+             f.decrypt(u"")
+ 
++    @skip_iso8601
+     def test_timestamp_ignored_no_ttl(self, monkeypatch, backend):
+         f = Fernet(base64.urlsafe_b64encode(b"\x00" * 32), backend=backend)
+         pt = b"encrypt me"
+-- 
+2.26.2
+
