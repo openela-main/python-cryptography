@@ -1,10 +1,12 @@
 %{!?python3_pkgversion:%global python3_pkgversion 3}
 
 %global srcname cryptography
+# rhbz#2172416: from_buffer(..., require_writable=True)
+%global cffi_version 1.11.5-6
 
 Name:           python-%{srcname}
 Version:        3.2.1
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        PyCA's cryptography library
 
 Group:          Development/Libraries
@@ -17,6 +19,8 @@ Patch0002:      0002-Support-pytest-3.4.2.patch
 Patch0003:	0003-Skip-iso8601-test-cases.patch
 Patch0004:	0004-Revert-remove-NPN-bindings.patch
 Patch0005:	0005-CVE-2020-36242.patch
+# https://github.com/pyca/cryptography/pull/8230
+Patch0006:		0006-CVE-2023-23931.patch
 
 BuildRequires:  openssl-devel
 BuildRequires:  gcc
@@ -29,7 +33,7 @@ BuildRequires:  python%{python3_pkgversion}-pretend
 BuildRequires:  python%{python3_pkgversion}-cryptography-vectors = %{version}
 BuildRequires:  python%{python3_pkgversion}-pytz
 BuildRequires:  python%{python3_pkgversion}-six >= 1.4.1
-BuildRequires:  python%{python3_pkgversion}-cffi >= 1.7
+BuildRequires:  python%{python3_pkgversion}-cffi >= %{cffi_version}
 
 %description
 cryptography is a package designed to expose cryptographic primitives and
@@ -42,7 +46,7 @@ Summary:        PyCA's cryptography library
 
 Requires:       openssl-libs
 Requires:       python%{python3_pkgversion}-six >= 1.4.1
-Requires:       python%{python3_pkgversion}-cffi >= 1.7
+Requires:       python%{python3_pkgversion}-cffi >= %{cffi_version}
 Conflicts:      python%{python3_pkgversion}-cryptography-vectors < %{version}
 Conflicts:      python%{python3_pkgversion}-cryptography-vectors > %{version}
 
@@ -82,6 +86,9 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__python3} -m pytest
 
 
 %changelog
+* Wed Feb 22 2023 Christian Heimes <cheimes@redhat.com> - 3.2.1-6
+- Fix CVE-2023-23931: Don't allow update_into to mutate immutable objects, resolves rhbz#2172404
+
 * Tue Jun 08 2021 Christian Heimes <cheimes@redhat.com> - 3.2.1-5
 - Rebuild for RHEL 8.5
 - Resolves: rhbz#1933071
