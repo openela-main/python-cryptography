@@ -7,7 +7,7 @@
 
 Name:           python-%{srcname}
 Version:        36.0.1
-Release:        2%{?dist}
+Release:        4%{?dist}
 Summary:        PyCA's cryptography library
 
 License:        ASL 2.0 or BSD
@@ -22,6 +22,9 @@ Patch2:		0002-Disable-DSA-tests-in-FIPS-mode-6916.patch
 Patch3:		0003-fixes-6927-handle-negative-return-values-from-openss.patch
 Patch4:		0004-Disable-test_openssl_assert_error_on_stack-in-FIPS-m.patch
 Patch5:		0005-Fixed-serialization-of-keyusage-ext-with-no-bits-693.patch
+# https://github.com/pyca/cryptography/pull/8230
+Patch6:		0006-CVE-2023-23931.patch
+Patch7:		0007-Adapt-for-OpenSSL-RSA-bleichenbacher-mitigation-7895.patch
 
 ExclusiveArch:  %{rust_arches}
 
@@ -113,9 +116,10 @@ export OPENSSL_ENABLE_SHA1_SIGNATURES=yes
 
 # see rhbz#2042413 for memleak. It's unstable with openssl 3.0.1 and makes
 # not much sense for downstream testing.
+# see rhbz#2171661 for test_load_invalid_ec_key_from_pem: error:030000CD:digital envelope routines::keymgmt export failure
 PYTHONPATH=${PWD}/vectors:%{buildroot}%{python3_sitearch} \
     %{__python3} -m pytest \
-    -k "not (test_openssl_memleak)"
+    -k "not (test_openssl_memleak or test_load_ecdsa_no_named_curve)"
 %endif
 
 %files -n python%{python3_pkgversion}-%{srcname}
@@ -125,6 +129,13 @@ PYTHONPATH=${PWD}/vectors:%{buildroot}%{python3_sitearch} \
 %{python3_sitearch}/%{srcname}-%{version}-py*.egg-info
 
 %changelog
+* Mon May 15 2023 Christian Heimes <cheimes@redhat.com> - 36.0.1-4
+- Fix FTBFS caused by rsa_pkcs1_implicit_rejection OpenSSL feature, resolves rhbz#2203840
+
+* Wed Feb 22 2023 Christian Heimes <cheimes@redhat.com> - 36.0.1-3
+- Fix CVE-2023-23931: Don't allow update_into to mutate immutable objects, resolves rhbz#2172399
+- Fix FTBFS due to failing test_load_invalid_ec_key_from_pem and test_decrypt_invalid_decrypt
+
 * Tue Apr 19 2022 Christian Heimes <cheimes@redhat.com> - 36.0.1-2
 - Rebuild for gating, related: rhbz#2060787
 
