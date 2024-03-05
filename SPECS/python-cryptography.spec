@@ -6,7 +6,7 @@
 
 Name:           python-%{srcname}
 Version:        3.2.1
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        PyCA's cryptography library
 
 Group:          Development/Libraries
@@ -75,7 +75,9 @@ find . -name .keep -print -delete
 rm -f tests/hazmat/primitives/test_padding.py
 # don't run hypothesis tests
 rm -rf tests/hypothesis
-PYTHONPATH=%{buildroot}%{python3_sitearch} %{__python3} -m pytest
+PYTHONPATH=%{buildroot}%{python3_sitearch} \
+    %{__python3} -m pytest \
+    -k "not test_decrypt_invalid_decrypt"
 
 
 %files -n python%{python3_pkgversion}-%{srcname}
@@ -86,6 +88,9 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__python3} -m pytest
 
 
 %changelog
+* Fri Dec 01 2023 Christian Heimes <cheimes@redhat.com> - 3.2.1-7
+- Fix FTBFS caused by rsa_pkcs1_implicit_rejection OpenSSL feature, resolves: RHEL-17873
+
 * Wed Feb 22 2023 Christian Heimes <cheimes@redhat.com> - 3.2.1-6
 - Fix CVE-2023-23931: Don't allow update_into to mutate immutable objects, resolves rhbz#2172404
 
