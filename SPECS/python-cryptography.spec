@@ -11,7 +11,7 @@
 
 Name:           python-%{srcname}
 Version:        3.3.1
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        PyCA's cryptography library
 
 License:        ASL 2.0 or BSD
@@ -28,6 +28,10 @@ Source2:        gpgkey-05FD_9FA1_6CF7_5735_0D91_A560_235A_E5F1_29F9_ED98.gpg
 # x86_64 compose of CRB, but we don't want to ship it at all.
 # See: https://projects.engineering.redhat.com/browse/RCM-72605
 ExcludeArch: i686
+
+# Security fix for CVE-2023-23931
+# Resolved upstream: https://github.com/pyca/cryptography/pull/8230
+Patch0006:      0006-CVE-2023-23931.patch
 
 BuildRequires:  openssl-devel
 BuildRequires:  gcc
@@ -168,6 +172,10 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} %{__python3} -m pytest -k "not (test_
 
 
 %changelog
+* Tue Aug 15 2023 Christian Heimes <cheimes@redhat.com> - 3.3.1-3
+- Fix CVE-2023-23931: Don't allow update_into to mutate immutable objects,
+- Resolves RHEL-4932
+
 * Mon Jan 18 2021 Tomas Orsava <torsava@redhat.com> - 3.3.1-2
 - Convert from Fedora to the python39 module in RHEL8
 - Resolves: rhbz#1877430
