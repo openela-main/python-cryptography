@@ -6,7 +6,7 @@
 
 Name:           python-%{srcname}
 Version:        3.2.1
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        PyCA's cryptography library
 
 Group:          Development/Libraries
@@ -20,7 +20,8 @@ Patch0003:	0003-Skip-iso8601-test-cases.patch
 Patch0004:	0004-Revert-remove-NPN-bindings.patch
 Patch0005:	0005-CVE-2020-36242.patch
 # https://github.com/pyca/cryptography/pull/8230
-Patch0006:		0006-CVE-2023-23931.patch
+Patch0006:	0006-CVE-2023-23931.patch
+Patch0007:	0008-CVE-2023-49083.patch
 
 BuildRequires:  openssl-devel
 BuildRequires:  gcc
@@ -88,6 +89,10 @@ PYTHONPATH=%{buildroot}%{python3_sitearch} \
 
 
 %changelog
+* Wed Jul 02 2025 Francisco Triviño <ftrivino@redhat.com> - 3.2.1-8
+- Fix CVE-2023-49083: NULL-dereference when loading PKCS7 certificates,
+  resolves RHEL-97452
+
 * Fri Dec 01 2023 Christian Heimes <cheimes@redhat.com> - 3.2.1-7
 - Fix FTBFS caused by rsa_pkcs1_implicit_rejection OpenSSL feature, resolves: RHEL-17873
 
