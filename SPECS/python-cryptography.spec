@@ -7,7 +7,7 @@
 
 Name:           python-%{srcname}
 Version:        36.0.1
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        PyCA's cryptography library
 
 License:        ASL 2.0 or BSD
@@ -25,6 +25,7 @@ Patch5:		0005-Fixed-serialization-of-keyusage-ext-with-no-bits-693.patch
 # https://github.com/pyca/cryptography/pull/8230
 Patch6:		0006-CVE-2023-23931.patch
 Patch7:		0007-Adapt-for-OpenSSL-RSA-bleichenbacher-mitigation-7895.patch
+Patch8:		0008-CVE-2023-49083.patch
 
 ExclusiveArch:  %{rust_arches}
 
@@ -129,6 +130,10 @@ PYTHONPATH=${PWD}/vectors:%{buildroot}%{python3_sitearch} \
 %{python3_sitearch}/%{srcname}-%{version}-py*.egg-info
 
 %changelog
+* Thu Jul 02 2025 Francisco Triviño <ftrivino@redhat.com> - 36.0.1-5
+- Fix CVE-2023-49083: NULL-dereference when loading PKCS7 certificates,
+  resolves RHEL-97450
+
 * Mon May 15 2023 Christian Heimes <cheimes@redhat.com> - 36.0.1-4
 - Fix FTBFS caused by rsa_pkcs1_implicit_rejection OpenSSL feature, resolves rhbz#2203840
 
