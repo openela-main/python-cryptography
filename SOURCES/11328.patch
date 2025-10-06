@@ -1,0 +1,36 @@
+From 7a1927b07343ee0e873017c3f5d58c56ea9e9ab1 Mon Sep 17 00:00:00 2001
+From: Christian Heimes <christian@python.org>
+Date: Mon, 22 Jul 2024 09:09:05 +0200
+Subject: [PATCH] Don't include engine.h when OPENSSL_NO_ENGINE is defined
+
+Fedora 41 and RHEL 10 are deprecating and phasing out OpenSSL ENGINE
+support. Downstream has moved `openssl/engine.h` into a separate RPM
+package and is recompiling packages with `-DOPENSSL_NO_ENGINE=1`. The
+compiler flag disables PyCA cryptography's ENGINE support successfully.
+We also like to build the downstream package without the `engine.h`
+header file present.
+
+This commit makes the include conditional. The `ENGINE` type is
+defined in `openssl/types.h`.
+
+See: https://src.fedoraproject.org/rpms/openssl/c/e67e9d9c40cd2cb9547e539c658e2b63f2736762?branch=rawhide
+See: https://issues.redhat.com/browse/RHEL-33747
+Signed-off-by: Christian Heimes <christian@python.org>
+---
+ src/_cffi_src/openssl/engine.py | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/_cffi_src/openssl/engine.py b/src/_cffi_src/openssl/engine.py
+index 9629a2c8f929..f47e20327003 100644
+--- a/src/_cffi_src/openssl/engine.py
++++ b/src/_cffi_src/openssl/engine.py
+@@ -5,7 +5,9 @@
+ from __future__ import annotations
+ 
+ INCLUDES = """
++#if !defined(OPENSSL_NO_ENGINE) || CRYPTOGRAPHY_IS_LIBRESSL
+ #include <openssl/engine.h>
++#endif
+ """
+ 
+ TYPES = """

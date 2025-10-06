@@ -1,0 +1,26 @@
+From aa3e70e086b1f36f55d58a0d84eae0b51dbe7dc6 Mon Sep 17 00:00:00 2001
+From: Alex Gaynor <alex.gaynor@gmail.com>
+Date: Tue, 3 Sep 2024 20:19:02 -0400
+Subject: [PATCH] allow sha1 in OAEP (#11536)
+
+fixes #11512
+---
+ src/rust/src/backend/rsa.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/rust/src/backend/rsa.rs b/src/rust/src/backend/rsa.rs
+index 3c01e7421..066b1412a 100644
+--- a/src/rust/src/backend/rsa.rs
++++ b/src/rust/src/backend/rsa.rs
+@@ -70,7 +70,7 @@ fn generate_private_key(public_exponent: u32, key_size: u32) -> CryptographyResu
+ }
+ 
+ fn oaep_hash_supported(md: &openssl::hash::MessageDigest) -> bool {
+-    (!cryptography_openssl::fips::is_enabled() && md == &openssl::hash::MessageDigest::sha1())
++    md == &openssl::hash::MessageDigest::sha1()
+         || md == &openssl::hash::MessageDigest::sha224()
+         || md == &openssl::hash::MessageDigest::sha256()
+         || md == &openssl::hash::MessageDigest::sha384()
+-- 
+2.46.0
+
